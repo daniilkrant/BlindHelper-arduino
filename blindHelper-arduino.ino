@@ -1,3 +1,6 @@
+#include <esp_now.h>
+#include <esp_wifi.h>
+
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiAP.h>
@@ -27,6 +30,7 @@ Ticker ticker;
 
 const char* ssid     = "BlindHelper000";
 const char* password = "12431243";
+uint8_t mac[] = {0x36, 0x33, 0x33, 0x33, 0x33, 0x33}; //LAST DIGIT SHOULD BE (DESIRED-1)
 
 WiFiServer server(80);
 
@@ -47,6 +51,7 @@ void buzz(){
 }
 
 void setup() {
+  esp_base_mac_addr_set(mac);
   ledcSetup(BUZZER_PIN, 5000, 8);
 
   Serial.begin(115200);
