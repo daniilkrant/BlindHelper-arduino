@@ -2,15 +2,28 @@
 #include <WiFiClient.h>
 #include <WiFiAP.h>
 
-#define LED_BUILTIN 2   // Set the GPIO pin where you connected your test LED or comment this line out if your dev board has a built-in LED
+#define BUZZER_PIN 16
+#define TONE_CHANNEL 0
 
 const char *ssid = "BlindHelper000";
 const char *password = "12431243";
 
 WiFiServer server(80);
 
+void tone(uint8_t pin, unsigned int frequency)
+{
+    ledcAttachPin(pin, TONE_CHANNEL);
+    ledcWriteTone(TONE_CHANNEL, frequency);
+}
+
+void noTone(uint8_t pin, uint8_t channel)
+{
+    ledcDetachPin(pin);
+    ledcWrite(TONE_CHANNEL, 0);
+}
+
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
+  ledcSetup(BUZZER_PIN, 5000, 8);
 
   Serial.begin(115200);
   Serial.println();
@@ -55,10 +68,10 @@ void loop() {
         }
 
         if (currentLine.endsWith("GET /H")) {
-          digitalWrite(LED_BUILTIN, HIGH);
-        }
-        if (currentLine.endsWith("GET /L")) {
-          digitalWrite(LED_BUILTIN, LOW);
+            tone(BUZZER_PIN, 1000);
+            delay(500);
+            noTone(BUZZER_PIN, TONE_CHANNEL);
+            delay(500);
         }
       }
     }
