@@ -5,7 +5,7 @@
 #include <WiFiClient.h>
 #include <WiFiAP.h>
 
-#include "Ticker.h"
+#include <DNSServer.h>
 
 #define BUZZER_PIN 16
 #define TONE_CHANNEL 0
@@ -24,14 +24,16 @@ int minParam[] = {200,50,50,1,100,1};
 int maxParam[] = {15000,5000,5000,10,10000,20};
 int paramArrDef[] = {220,200,300,5,1000,5};
 bool isParamDef = true;
-bool state = false;
 volatile int count = 0;
-Ticker ticker;
 
 const char* ssid     = "BlindHelper000";
 const char* password = "12431243";
 uint8_t mac[] = {0x36, 0x33, 0x33, 0x33, 0x33, 0x33}; //LAST DIGIT SHOULD BE (DESIRED-1)
 
+const byte DNS_PORT = 53;
+IPAddress netMsk(255, 255, 255, 0);
+IPAddress apIP(192, 168, 4, 1);
+DNSServer dnsServer;
 WiFiServer server(80);
 
 void tone(uint8_t pin, unsigned int frequency)
@@ -46,19 +48,22 @@ void noTone(uint8_t pin, uint8_t channel)
     ledcWrite(TONE_CHANNEL, 0);
 }
 
-void buzz(){
-     state = true;
-}
-
 void setup() {
-  esp_base_mac_addr_set(mac);
+//  esp_base_mac_addr_set(mac);
   ledcSetup(BUZZER_PIN, 5000, 8);
+
+  paramToDef();
+  paramArr[3] = 1;
+  paramArr[5] = 1;
+  buzzing();
 
   Serial.begin(115200);
   Serial.println();
   Serial.println("Configuring access point...");
 
+  WiFi.softAPConfig(apIP, apIP, netMsk);
   WiFi.softAP(ssid, password);
+  dnsServer.start(DNS_PORT, "*", apIP);
   IPAddress myIP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(myIP);
@@ -78,6 +83,7 @@ void setup() {
  * start buzzing
  */
 void loop() {
+  dnsServer.processNextRequest();
   WiFiClient client = server.available();
 
   if (client) {     
@@ -146,7 +152,6 @@ bool parsLineToInt(String line){
       i++;
     }
     Serial.println("Start ticker");
-    ticker.attach(paramArr[0]/1000, buzz);
     return true;
 }
 
@@ -178,6 +183,4 @@ void buzzing(){
     delay(paramArr[4]);
   }
 
-  ticker.detach();
-  state = false;
 }
