@@ -32,7 +32,7 @@ uint8_t mac[] = {0x36, 0x33, 0x33, 0x33, 0x33, 0x33}; //LAST DIGIT SHOULD BE (DE
 
 const byte DNS_PORT = 53;
 IPAddress netMsk(255, 255, 255, 0);
-IPAddress apIP(192, 168, 1, 1);
+IPAddress apIP(192, 168, 4, 1);
 DNSServer dnsServer;
 WiFiServer server(80);
 
