@@ -49,17 +49,25 @@ XT_DAC_Audio_Class DacAudio(25, 0);
 XT_Sequence_Class Sequence;
 
 BLEScan* pBLEScan;
+const char speakerTimeout = 30; //minutes
+char time_counter = 0;
+
 class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice d) {
       if (d.haveManufacturerData()) {
         char *pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)d.getManufacturerData().data(), d.getManufacturerData().length());
-        std::string uuid_major_minor(pHex);
-        if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
-            Sequence.Repeat = 0;
-            Speaker.Repeat = 5;
-            DacAudio.Play(&Sequence);
-        } 
         Serial.println(pHex);
+        if (time_counter <= (60 / scanPeriod) * speakerTimeout) {
+          return;
+        } else {
+          time_counter = 0;
+          std::string uuid_major_minor(pHex);
+          if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
+            Sequence.Repeat = 0;
+            Speaker.Repeat = 4;
+            DacAudio.Play(&Sequence);
+          } 
+        }
       }
     }
 };
@@ -231,6 +239,8 @@ void buzzing(){
 
 void* scanBLE(void *arg) {
   while (1) {
+      time_counter++;
+      Serial.printf("Timeout: %d\n", time_counter);
       Serial.println("Scanning BLE:");
       pBLEScan->start(scanTime, false);
       delay(scanPeriod * 1000);
