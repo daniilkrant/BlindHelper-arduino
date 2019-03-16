@@ -1,14 +1,25 @@
 #include <esp_now.h>
 #include <esp_wifi.h>
-
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiAP.h>
-
 #include <DNSServer.h>
+
+#include <XT_DAC_Audio.h>
+
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+#include "pthread.h"
 
 #define BUZZER_PIN 16
 #define TONE_CHANNEL 0
+
+#define scanTime 5
+#define scanPeriod 20 //seconds
+const char* beacon_major_minor = "00010001";
+//BEACON pass - "oncrea"
 
 /**
  * f - frequency of signal
@@ -24,29 +35,34 @@ int minParam[] = {200,50,50,1,100,1};
 int maxParam[] = {15000,5000,5000,10,10000,20};
 int paramArrDef[] = {220,200,300,5,1000,5};
 bool isParamDef = true;
-volatile int count = 0;
-
 const char* ssid     = "BlindHelper000";
 const char* password = "12431243";
-uint8_t mac[] = {0x36, 0x33, 0x33, 0x33, 0x33, 0x33}; //LAST DIGIT SHOULD BE (DESIRED-1)
-
+//uint8_t mac[] = {0x36, 0x33, 0x33, 0x33, 0x33, 0x33}; //LAST DIGIT SHOULD BE (DESIRED-1)
 const byte DNS_PORT = 53;
 IPAddress netMsk(255, 255, 255, 0);
-IPAddress apIP(192, 168, 1, 1);
+IPAddress apIP(192, 168, 4, 1);
 DNSServer dnsServer;
 WiFiServer server(80);
 
-void tone(uint8_t pin, unsigned int frequency)
-{
-    ledcAttachPin(pin, TONE_CHANNEL);
-    ledcWriteTone(TONE_CHANNEL, frequency);
-}
+XT_Wav_Class Speaker(rawData);
+XT_DAC_Audio_Class DacAudio(25, 0);
+XT_Sequence_Class Sequence;
 
-void noTone(uint8_t pin, uint8_t channel)
-{
-    ledcDetachPin(pin);
-    ledcWrite(TONE_CHANNEL, 0);
-}
+BLEScan* pBLEScan;
+class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
+    void onResult(BLEAdvertisedDevice d) {
+      if (d.haveManufacturerData()) {
+        char *pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)d.getManufacturerData().data(), d.getManufacturerData().length());
+        std::string uuid_major_minor(pHex);
+        if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
+            Sequence.Repeat = 0;
+            Speaker.Repeat = 5;
+            DacAudio.Play(&Sequence);
+        } 
+        Serial.println(pHex);
+      }
+    }
+};
 
 void setup() {
 //  esp_base_mac_addr_set(mac);
@@ -56,6 +72,11 @@ void setup() {
   paramArr[3] = 1;
   paramArr[5] = 1;
   buzzing();
+  
+  Sequence.AddPlayItem(&Speaker);
+  Sequence.Repeat = 0;
+  Speaker.Repeat = 0;
+  DacAudio.Play(&Sequence);
 
   Serial.begin(115200);
   Serial.println();
@@ -70,6 +91,16 @@ void setup() {
   server.begin();
 
   Serial.println("Server started");
+
+  BLEDevice::init("");
+  pBLEScan = BLEDevice::getScan();
+  pBLEScan->setAdvertisedDeviceCallbacks(new AdvertisedDeviceCallbacks());
+  pBLEScan->setActiveScan(true);
+  pBLEScan->setInterval(100);
+  pBLEScan->setWindow(99);
+
+  pthread_t BLEThread;
+  pthread_create(&BLEThread, NULL, &scanBLE, NULL);
 }
 
 
@@ -83,6 +114,8 @@ void setup() {
  * start buzzing
  */
 void loop() {
+  DacAudio.FillBuffer();
+  
   dnsServer.processNextRequest();
   WiFiClient client = server.available();
 
@@ -117,6 +150,18 @@ void loop() {
     client.stop();
     Serial.println("Client Disconnected.");
   }
+}
+
+void tone(uint8_t pin, unsigned int frequency)
+{
+    ledcAttachPin(pin, TONE_CHANNEL);
+    ledcWriteTone(TONE_CHANNEL, frequency);
+}
+
+void noTone(uint8_t pin, uint8_t channel)
+{
+    ledcDetachPin(pin);
+    ledcWrite(TONE_CHANNEL, 0);
 }
 
 /**
@@ -182,5 +227,12 @@ void buzzing(){
     }
     delay(paramArr[4]);
   }
+}
 
+void* scanBLE(void *arg) {
+  while (1) {
+      Serial.println("Scanning BLE:");
+      pBLEScan->start(scanTime, false);
+      delay(scanPeriod * 1000);
+  }
 }
