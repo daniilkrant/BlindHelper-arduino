@@ -33,7 +33,7 @@ const char* beacon_major_minor = "00010001";
 int paramArr[] = {220,200,300,5,1000,5};
 int minParam[] = {200,50,50,1,100,1};
 int maxParam[] = {15000,5000,5000,10,10000,20};
-int paramArrDef[] = {220,200,300,5,1000,5};
+int paramArrDef[] = {220,200,300,5,1000,1};
 bool isParamDef = true;
 const char* ssid     = "BlindHelper000";
 const char* password = "12431243";
@@ -63,6 +63,9 @@ class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
           time_counter = 0;
           std::string uuid_major_minor(pHex);
           if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
+            paramToDef();
+            buzzing();
+
             Sequence.Repeat = 0;
             Speaker.Repeat = 4;
             DacAudio.Play(&Sequence);
