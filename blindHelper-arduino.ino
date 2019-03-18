@@ -5,8 +5,6 @@
 #include <WiFiAP.h>
 #include <DNSServer.h>
 
-#include <XT_DAC_Audio.h>
-
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>
@@ -44,14 +42,12 @@ IPAddress apIP(192, 168, 4, 1);
 DNSServer dnsServer;
 WiFiServer server(80);
 
-XT_Wav_Class Speaker(rawData);
-XT_DAC_Audio_Class DacAudio(25, 0);
-XT_Sequence_Class Sequence;
-
 BLEScan* pBLEScan;
 const char speakerTimeout = 30; //minutes
 char time_counter = 0;
 
+void paramToDef();
+void buzzing();
 class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice d) {
       if (d.haveManufacturerData()) {
@@ -65,10 +61,6 @@ class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
           if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
             paramToDef();
             buzzing();
-
-            Sequence.Repeat = 0;
-            Speaker.Repeat = 4;
-            DacAudio.Play(&Sequence);
           } 
         }
       }
@@ -84,11 +76,6 @@ void setup() {
   paramArr[5] = 1;
   buzzing();
   
-  Sequence.AddPlayItem(&Speaker);
-  Sequence.Repeat = 0;
-  Speaker.Repeat = 0;
-  DacAudio.Play(&Sequence);
-
   Serial.begin(115200);
   Serial.println();
   Serial.println("Configuring access point...");
@@ -125,8 +112,6 @@ void setup() {
  * start buzzing
  */
 void loop() {
-  DacAudio.FillBuffer();
-  
   dnsServer.processNextRequest();
   WiFiClient client = server.available();
 
