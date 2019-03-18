@@ -5,6 +5,7 @@
 #include <WiFiAP.h>
 #include <DNSServer.h>
 
+#include "BluetoothSerial.h"
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>
@@ -42,9 +43,10 @@ IPAddress apIP(192, 168, 4, 1);
 DNSServer dnsServer;
 WiFiServer server(80);
 
+BluetoothSerial SerialBT;
 BLEScan* pBLEScan;
 const char speakerTimeout = 30; //minutes
-char time_counter = 0;
+char time_counter = -1;
 
 void paramToDef();
 void buzzing();
@@ -97,6 +99,7 @@ void setup() {
   pBLEScan->setInterval(100);
   pBLEScan->setWindow(99);
 
+  SerialBT.begin(ssid);
   pthread_t BLEThread;
   pthread_create(&BLEThread, NULL, &scanBLE, NULL);
 }
@@ -113,8 +116,16 @@ void setup() {
  */
 void loop() {
   dnsServer.processNextRequest();
-  WiFiClient client = server.available();
 
+  if (SerialBT.available()) {
+    String params = SerialBT.readString();
+    paramToDef();
+    Serial.println(params);
+    parsLineToInt(params);
+    buzzing();
+  }
+
+  WiFiClient client = server.available();
   if (client) {     
     Serial.println("New Client.");
     String currentLine = "";
@@ -176,6 +187,7 @@ void paramToDef(){
  * write it to paramArr and
  * start buzzing
  */
+ // Line should be /x/x/x/x/x/x/x/
 bool parsLineToInt(String line){
     line.remove(0,1);
     int i = 0; //index of paramArr
@@ -227,6 +239,9 @@ void buzzing(){
 
 void* scanBLE(void *arg) {
   while (1) {
+      if (time_counter < 0) {
+        time_counter = (60 / scanPeriod) * speakerTimeout;
+      }
       time_counter++;
       Serial.printf("Timeout: %d\n", time_counter);
       Serial.println("Scanning BLE:");
