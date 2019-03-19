@@ -46,24 +46,22 @@ WiFiServer server(80);
 BluetoothSerial SerialBT;
 BLEScan* pBLEScan;
 const char speakerTimeout = 30; //minutes
-char time_counter = -1;
+int time_counter = -3;
+bool beaconFound = false;
 
 void paramToDef();
 void buzzing();
 class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice d) {
+      Serial.printf("Timeout: %d\n", time_counter);
       if (d.haveManufacturerData()) {
         char *pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)d.getManufacturerData().data(), d.getManufacturerData().length());
         Serial.println(pHex);
-        if (time_counter <= (60 / scanPeriod) * speakerTimeout) {
-          return;
+        std::string uuid_major_minor(pHex);
+        if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
+          beaconFound = true;
         } else {
-          time_counter = 0;
-          std::string uuid_major_minor(pHex);
-          if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
-            paramToDef();
-            buzzing();
-          } 
+          beaconFound = false;
         }
       }
     }
@@ -239,13 +237,19 @@ void buzzing(){
 
 void* scanBLE(void *arg) {
   while (1) {
+      Serial.println("Scanning BLE:");
       if (time_counter < 0) {
         time_counter = (60 / scanPeriod) * speakerTimeout;
       }
-      time_counter++;
-      Serial.printf("Timeout: %d\n", time_counter);
-      Serial.println("Scanning BLE:");
       pBLEScan->start(scanTime, false);
+      time_counter++;
+      if (time_counter >= (60 / scanPeriod) * speakerTimeout) {
+       time_counter = 0;
+       if (beaconFound) {
+         paramToDef();
+         buzzing();
+       }
+      }
       delay(scanPeriod * 1000);
   }
 }
