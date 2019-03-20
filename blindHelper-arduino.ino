@@ -12,14 +12,64 @@
 #include <BLEAdvertisedDevice.h>
 #include "pthread.h"
 
-#define BUZZER_PIN 16
-#define TONE_CHANNEL 0
+#include <Arduino.h>
+#include <DFMiniMp3.h>
 
-#define scanTime 5
+void paramToDef();
+void buzzing();
+int time_counter = -3;
+bool beaconFound = false;
 #define scanPeriod 20 //seconds
 const char* beacon_major_minor = "00010001";
 //BEACON pass - "oncrea"
+class Mp3Notify
+{
+public:
+  static void OnError(uint16_t errorCode)
+  {
+    // see DfMp3_Error for code meaning
+    Serial.println();
+    Serial.print("Com Error ");
+    Serial.println(errorCode);
+  }
 
+  static void OnPlayFinished(uint16_t globalTrack)
+  {
+    Serial.println();
+    Serial.print("Play finished for #");
+    Serial.println(globalTrack);   
+  }
+
+  static void OnCardOnline(uint16_t code)
+  {
+    Serial.println();
+    Serial.print("Card online ");
+    Serial.println(code);     
+  }
+
+  static void OnCardInserted(uint16_t code)
+  {
+    Serial.println();
+    Serial.print("Card inserted ");
+    Serial.println(code);
+    paramToDef();
+    buzzing(); 
+  }
+
+  static void OnCardRemoved(uint16_t code)
+  {
+    Serial.println();
+    Serial.print("Card removed ");
+    Serial.println(code);
+    paramToDef();
+    buzzing();
+  }
+};
+
+#define BUZZER_PIN 15
+#define TONE_CHANNEL 0
+
+#define scanTime 5
 /**
  * f - frequency of signal
  * l - length of signal
@@ -46,26 +96,8 @@ WiFiServer server(80);
 BluetoothSerial SerialBT;
 BLEScan* pBLEScan;
 const char speakerTimeout = 30; //minutes
-int time_counter = -3;
-bool beaconFound = false;
 
-void paramToDef();
-void buzzing();
-class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
-    void onResult(BLEAdvertisedDevice d) {
-      Serial.printf("Timeout: %d\n", time_counter);
-      if (d.haveManufacturerData()) {
-        char *pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)d.getManufacturerData().data(), d.getManufacturerData().length());
-        Serial.println(pHex);
-        std::string uuid_major_minor(pHex);
-        if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
-          beaconFound = true;
-        } else {
-          beaconFound = false;
-        }
-      }
-    }
-};
+DFMiniMp3<HardwareSerial, Mp3Notify> mp3(Serial2);
 
 void setup() {
 //  esp_base_mac_addr_set(mac);
@@ -89,10 +121,12 @@ void setup() {
   server.begin();
 
   Serial.println("Server started");
+  
+  mp3.begin();
+  mp3.setVolume(30); // 0 - 30
 
   BLEDevice::init("");
   pBLEScan = BLEDevice::getScan();
-  pBLEScan->setAdvertisedDeviceCallbacks(new AdvertisedDeviceCallbacks());
   pBLEScan->setActiveScan(true);
   pBLEScan->setInterval(100);
   pBLEScan->setWindow(99);
@@ -138,6 +172,9 @@ void loop() {
             paramToDef();
             parsLineToInt(currentLine);
             buzzing();
+            mp3.playMp3FolderTrack(1);
+            mp3.playMp3FolderTrack(2);
+            mp3.playMp3FolderTrack(3);
           }
           if (currentLine.length() == 0) {
             client.println("HTTP/1.1 200 OK");
@@ -238,18 +275,32 @@ void buzzing(){
 void* scanBLE(void *arg) {
   while (1) {
       Serial.println("Scanning BLE:");
+      Serial.printf("Timeout: %d\n", time_counter);
       if (time_counter < 0) {
-        time_counter = (60 / scanPeriod) * speakerTimeout;
+        time_counter = (60 / scanPeriod) * speakerTimeout + 10;
       }
-      pBLEScan->start(scanTime, false);
+      BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
       time_counter++;
       if (time_counter >= (60 / scanPeriod) * speakerTimeout) {
-       time_counter = 0;
-       if (beaconFound) {
+       for (int i = 0; i < foundDevices.getCount(); i++) {
+        BLEAdvertisedDevice d = foundDevices.getDevice(i);
+        if (d.haveManufacturerData()) {
+        char *pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)d.getManufacturerData().data(), d.getManufacturerData().length());
+        Serial.println(pHex);
+        std::string uuid_major_minor(pHex);
+        if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
+         time_counter = 0;
          paramToDef();
          buzzing();
+         mp3.playMp3FolderTrack(1);
+         mp3.playMp3FolderTrack(2);
+         mp3.playMp3FolderTrack(3);
+
+         break;
        }
-      }
-      delay(scanPeriod * 1000);
+       }
+     }
+    }
+    delay(scanPeriod * 1000);
   }
 }
