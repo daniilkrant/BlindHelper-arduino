@@ -20,47 +20,49 @@ void buzzing();
 int time_counter = -3;
 bool beaconFound = false;
 #define scanPeriod 20 //seconds
-const char* beacon_major_minor = "00010001";
+const char* beacon_major_minor = "0001";
+bool needsToPlay = false;
 //BEACON pass - "oncrea"
+
 class Mp3Notify
 {
 public:
   static void OnError(uint16_t errorCode)
   {
     // see DfMp3_Error for code meaning
-    Serial.println();
-    Serial.print("Com Error ");
-    Serial.println(errorCode);
+    //Serial.println();
+    //Serial.print("Com Error ");
+    //Serial.println(errorCode);
   }
 
   static void OnPlayFinished(uint16_t globalTrack)
   {
-    Serial.println();
-    Serial.print("Play finished for #");
-    Serial.println(globalTrack);   
+    //Serial.println();
+    //Serial.print("Play finished for #");
+    //Serial.println(globalTrack);   
   }
 
   static void OnCardOnline(uint16_t code)
   {
-    Serial.println();
-    Serial.print("Card online ");
-    Serial.println(code);     
+    //Serial.println();
+    //Serial.print("Card online ");
+    //Serial.println(code);     
   }
 
   static void OnCardInserted(uint16_t code)
   {
-    Serial.println();
-    Serial.print("Card inserted ");
-    Serial.println(code);
+    //Serial.println();
+    //Serial.print("Card inserted ");
+    //Serial.println(code);
     paramToDef();
     buzzing(); 
   }
 
   static void OnCardRemoved(uint16_t code)
   {
-    Serial.println();
-    Serial.print("Card removed ");
-    Serial.println(code);
+    //Serial.println();
+    //Serial.print("Card removed ");
+    //Serial.println(code);
     paramToDef();
     buzzing();
   }
@@ -84,7 +86,7 @@ int minParam[] = {200,50,50,1,100,1};
 int maxParam[] = {15000,5000,5000,10,10000,20};
 int paramArrDef[] = {220,200,300,5,1000,1};
 bool isParamDef = true;
-const char* ssid     = "BlindHelper000";
+const char* ssid     = "BlindHelper0001";
 const char* password = "12431243";
 //uint8_t mac[] = {0x36, 0x33, 0x33, 0x33, 0x33, 0x33}; //LAST DIGIT SHOULD BE (DESIRED-1)
 const byte DNS_PORT = 53;
@@ -120,10 +122,13 @@ void setup() {
   Serial.println(myIP);
   server.begin();
 
-  Serial.println("Server started");
+  //Serial.println("Server started");
   
   mp3.begin();
-  mp3.setVolume(30); // 0 - 30
+  mp3.setVolume(24); // 0 - 30
+  uint16_t count = mp3.getTotalTrackCount();
+  //Serial.print("files ");
+  //Serial.println(count);
 
   BLEDevice::init("");
   pBLEScan = BLEDevice::getScan();
@@ -134,8 +139,8 @@ void setup() {
   SerialBT.begin(ssid);
   pthread_t BLEThread;
   pthread_create(&BLEThread, NULL, &scanBLE, NULL);
+  needsToPlay = true;
 }
-
 
 // Request string looks like: GET //100/150/& HTTP/1.1
 /**
@@ -147,6 +152,12 @@ void setup() {
  * start buzzing
  */
 void loop() {
+  if (needsToPlay) {
+    Serial.println("Playing mp3");
+    mp3.playMp3FolderTrack(1);
+    needsToPlay = false;
+    delay(5000);
+  }
   dnsServer.processNextRequest();
 
   if (SerialBT.available()) {
@@ -168,13 +179,11 @@ void loop() {
           if (currentLine.indexOf("GET //") >= 0) {
             currentLine.remove(0, currentLine.indexOf("GET /") + 5);
             currentLine.remove(currentLine.indexOf("& "), currentLine.length());
-            Serial.println(currentLine);
+            //Serial.println(currentLine);
             paramToDef();
             parsLineToInt(currentLine);
             buzzing();
             mp3.playMp3FolderTrack(1);
-            mp3.playMp3FolderTrack(2);
-            mp3.playMp3FolderTrack(3);
           }
           if (currentLine.length() == 0) {
             client.println("HTTP/1.1 200 OK");
@@ -286,16 +295,13 @@ void* scanBLE(void *arg) {
         BLEAdvertisedDevice d = foundDevices.getDevice(i);
         if (d.haveManufacturerData()) {
         char *pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)d.getManufacturerData().data(), d.getManufacturerData().length());
-        Serial.println(pHex);
+        //Serial.println(pHex);
         std::string uuid_major_minor(pHex);
         if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
          time_counter = 0;
          paramToDef();
          buzzing();
-         mp3.playMp3FolderTrack(1);
-         mp3.playMp3FolderTrack(2);
-         mp3.playMp3FolderTrack(3);
-
+         needsToPlay = true;
          break;
        }
        }
