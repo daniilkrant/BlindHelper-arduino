@@ -13,8 +13,6 @@
 #include "pthread.h"
 
 #include <Arduino.h>
-#include <DFMiniMp3.h>
-
 void paramToDef();
 void buzzing();
 int time_counter = -3;
@@ -23,50 +21,6 @@ bool beaconFound = false;
 const char* beacon_major_minor = "0001";
 bool needsToPlay = false;
 //BEACON pass - "oncrea"
-
-class Mp3Notify
-{
-public:
-  static void OnError(uint16_t errorCode)
-  {
-    // see DfMp3_Error for code meaning
-    //Serial.println();
-    //Serial.print("Com Error ");
-    //Serial.println(errorCode);
-  }
-
-  static void OnPlayFinished(uint16_t globalTrack)
-  {
-    //Serial.println();
-    //Serial.print("Play finished for #");
-    //Serial.println(globalTrack);   
-  }
-
-  static void OnCardOnline(uint16_t code)
-  {
-    //Serial.println();
-    //Serial.print("Card online ");
-    //Serial.println(code);     
-  }
-
-  static void OnCardInserted(uint16_t code)
-  {
-    //Serial.println();
-    //Serial.print("Card inserted ");
-    //Serial.println(code);
-    paramToDef();
-    buzzing(); 
-  }
-
-  static void OnCardRemoved(uint16_t code)
-  {
-    //Serial.println();
-    //Serial.print("Card removed ");
-    //Serial.println(code);
-    paramToDef();
-    buzzing();
-  }
-};
 
 #define BUZZER_PIN 15
 #define TONE_CHANNEL 0
@@ -95,11 +49,11 @@ IPAddress apIP(192, 168, 4, 1);
 DNSServer dnsServer;
 WiFiServer server(80);
 
-BluetoothSerial SerialBT;
+//BluetoothSerial SerialBT;
 BLEScan* pBLEScan;
-const char speakerTimeout = 30; //minutes
+const char speakerTimeout = 3; //minutes
 
-DFMiniMp3<HardwareSerial, Mp3Notify> mp3(Serial2);
+//DFMiniMp3<HardwareSerial, Mp3Notify> mp3(Serial2);
 
 void setup() {
 //  esp_base_mac_addr_set(mac);
@@ -114,7 +68,7 @@ void setup() {
   Serial.println();
   Serial.println("Configuring access point...");
 
-  WiFi.softAPConfig(apIP, apIP, netMsk);
+//  WiFi.softAPConfig(apIP, apIP, netMsk);
   WiFi.softAP(ssid, password);
   dnsServer.start(DNS_PORT, "*", apIP);
   IPAddress myIP = WiFi.softAPIP();
@@ -124,9 +78,9 @@ void setup() {
 
   //Serial.println("Server started");
   
-  mp3.begin();
-  mp3.setVolume(24); // 0 - 30
-  uint16_t count = mp3.getTotalTrackCount();
+//  mp3.begin();
+//  mp3.setVolume(24); // 0 - 30
+//  uint16_t count = mp3.getTotalTrackCount();
   //Serial.print("files ");
   //Serial.println(count);
 
@@ -136,7 +90,7 @@ void setup() {
   pBLEScan->setInterval(100);
   pBLEScan->setWindow(99);
 
-  SerialBT.begin(ssid);
+//  SerialBT.begin(ssid);
   pthread_t BLEThread;
   pthread_create(&BLEThread, NULL, &scanBLE, NULL);
   needsToPlay = true;
@@ -152,21 +106,13 @@ void setup() {
  * start buzzing
  */
 void loop() {
-  if (needsToPlay) {
-    Serial.println("Playing mp3");
-    mp3.playMp3FolderTrack(1);
-    needsToPlay = false;
-    delay(5000);
-  }
+//  if (needsToPlay) {
+//    Serial.println("Playing mp3");
+////    mp3.playMp3FolderTrack(1);
+//    needsToPlay = false;
+//    delay(5000);
+//  }
   dnsServer.processNextRequest();
-
-  if (SerialBT.available()) {
-    String params = SerialBT.readString();
-    paramToDef();
-    Serial.println(params);
-    parsLineToInt(params);
-    buzzing();
-  }
 
   WiFiClient client = server.available();
   if (client) {     
@@ -183,7 +129,7 @@ void loop() {
             paramToDef();
             parsLineToInt(currentLine);
             buzzing();
-            mp3.playMp3FolderTrack(1);
+//            mp3.playMp3FolderTrack(1);
           }
           if (currentLine.length() == 0) {
             client.println("HTTP/1.1 200 OK");
@@ -290,6 +236,7 @@ void* scanBLE(void *arg) {
       }
       BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
       time_counter++;
+//      if (time_counter >= (60 / scanPeriod) * speakerTimeout) {
       if (time_counter >= (60 / scanPeriod) * speakerTimeout) {
        for (int i = 0; i < foundDevices.getCount(); i++) {
         BLEAdvertisedDevice d = foundDevices.getDevice(i);
