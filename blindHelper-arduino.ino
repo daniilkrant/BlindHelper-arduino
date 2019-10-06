@@ -22,6 +22,9 @@ const char* beacon_major_minor = "0001";
 bool needsToPlay = false;
 //BEACON pass - "oncrea"
 
+#define WIFI_CLIENT 0
+#define BT_CLIENT 1
+
 #define BUZZER_PIN 15
 #define TONE_CHANNEL 0
 
@@ -49,7 +52,7 @@ IPAddress apIP(192, 168, 4, 1);
 DNSServer dnsServer;
 WiFiServer server(80);
 
-//BluetoothSerial SerialBT;
+BluetoothSerial SerialBT;
 BLEScan* pBLEScan;
 const char speakerTimeout = 3; //minutes
 
@@ -90,10 +93,73 @@ void setup() {
   pBLEScan->setInterval(100);
   pBLEScan->setWindow(99);
 
-//  SerialBT.begin(ssid);
+  SerialBT.begin(ssid);
   pthread_t BLEThread;
   pthread_create(&BLEThread, NULL, &scanBLE, NULL);
   needsToPlay = true;
+}
+
+void processClient(int client_type, WiFiClient *client_ptr) {
+  Serial.printf("New Client: %d.\n", client_type);
+  if (client_type == WIFI_CLIENT) {
+    String currentLine = "";
+    while (client_ptr->connected()) {
+      if (client_ptr->available()) {
+        char c = client_ptr->read();
+        if (c == '\n') {
+          if (currentLine.indexOf("GET //") >= 0) {
+            currentLine.remove(0, currentLine.indexOf("GET /") + 5);
+            currentLine.remove(currentLine.indexOf("& "), currentLine.length());
+            //Serial.println(currentLine);
+            paramToDef();
+            parsLineToInt(currentLine);
+            client_ptr->stop();
+            Serial.printf("Client Disconnected %d.\n", client_type);
+            buzzing();
+//            mp3.playMp3FolderTrack(1);
+          }
+          if (currentLine.length() == 0) {
+            client_ptr->println("HTTP/1.1 200 OK");
+            client_ptr->println("Content-type:text/html");
+            client_ptr->println();
+            break;
+          } else {
+            currentLine = "";
+          }
+        } else if (c != '\r') {
+          currentLine += c;
+        }
+      }
+    }
+  }
+  if (client_type == BT_CLIENT) {
+    String currentLine = "";
+    while (SerialBT.connected()) {
+      if (SerialBT.available()) {
+        char c = SerialBT.read();
+        Serial.println(c);
+        if (c == '\n') {
+          if (currentLine.indexOf("GET //") >= 0) {
+            currentLine.remove(0, currentLine.indexOf("GET /") + 5);
+            currentLine.remove(currentLine.indexOf("& "), currentLine.length());
+            //Serial.println(currentLine);
+            paramToDef();
+            parsLineToInt(currentLine);
+            SerialBT.end();
+            Serial.printf("Client Disconnected %d.\n", client_type);
+            buzzing();
+            return;
+          }
+          if (currentLine.length() != 0) {
+            currentLine = "";
+          }
+        } else if (c != '\r') {
+          currentLine += c;
+        }
+      }
+    } 
+  }
+   
 }
 
 // Request string looks like: GET //100/150/& HTTP/1.1
@@ -106,46 +172,16 @@ void setup() {
  * start buzzing
  */
 void loop() {
-//  if (needsToPlay) {
-//    Serial.println("Playing mp3");
-////    mp3.playMp3FolderTrack(1);
-//    needsToPlay = false;
-//    delay(5000);
-//  }
   dnsServer.processNextRequest();
 
-  WiFiClient client = server.available();
-  if (client) {     
-    Serial.println("New Client.");
-    String currentLine = "";
-    while (client.connected()) {
-      if (client.available()) {
-        char c = client.read();
-        if (c == '\n') {
-          if (currentLine.indexOf("GET //") >= 0) {
-            currentLine.remove(0, currentLine.indexOf("GET /") + 5);
-            currentLine.remove(currentLine.indexOf("& "), currentLine.length());
-            //Serial.println(currentLine);
-            paramToDef();
-            parsLineToInt(currentLine);
-            buzzing();
-//            mp3.playMp3FolderTrack(1);
-          }
-          if (currentLine.length() == 0) {
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println();
-            break;
-          } else {
-            currentLine = "";
-          }
-        } else if (c != '\r') {
-          currentLine += c;
-        }
-      }
-    }
-    client.stop();
-    Serial.println("Client Disconnected.");
+  WiFiClient wifi_client = server.available();
+  bool btClient = SerialBT.available();
+  if (wifi_client) {     
+     processClient(WIFI_CLIENT, &wifi_client);
+  }
+
+  if (btClient) {
+    processClient(BT_CLIENT, &wifi_client);
   }
 }
 
@@ -236,7 +272,6 @@ void* scanBLE(void *arg) {
       }
       BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
       time_counter++;
-//      if (time_counter >= (60 / scanPeriod) * speakerTimeout) {
       if (time_counter >= (60 / scanPeriod) * speakerTimeout) {
        for (int i = 0; i < foundDevices.getCount(); i++) {
         BLEAdvertisedDevice d = foundDevices.getDevice(i);
