@@ -17,8 +17,10 @@ void paramToDef();
 void buzzing();
 int time_counter = -3;
 bool beaconFound = false;
-#define scanPeriod 20 //seconds
+#define scanPeriod 5 //seconds
 const char* beacon_major_minor = "0001";
+const char* btn_major = "c6eb07647825";
+const char* small_btn_major = "00010002";
 bool needsToPlay = false;
 //BEACON pass - "oncrea"
 
@@ -145,7 +147,7 @@ void processClient(int client_type, WiFiClient *client_ptr) {
             //Serial.println(currentLine);
             paramToDef();
             parsLineToInt(currentLine);
-            SerialBT.end();
+//            SerialBT.end();
             Serial.printf("Client Disconnected %d.\n", client_type);
             buzzing();
             return;
@@ -271,13 +273,32 @@ void* scanBLE(void *arg) {
         time_counter = (60 / scanPeriod) * speakerTimeout + 10;
       }
       BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
+
+      //BTN
+      for (int i = 0; i < foundDevices.getCount(); i++) {
+        BLEAdvertisedDevice d = foundDevices.getDevice(i);
+        if (true) {
+        char *pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)d.getManufacturerData().data(), d.getManufacturerData().length());
+        Serial.println(pHex);
+        std::string uuid_major_minor(pHex);
+        if ((uuid_major_minor.find(btn_major) != std::string::npos) ||
+        (uuid_major_minor.find(small_btn_major) != std::string::npos)){
+         Serial.println("BTn found");
+         paramToDef();
+         buzzing();
+         needsToPlay = true;
+         break;
+        }
+       }
+      }
+      //BTN
+      
       time_counter++;
       if (time_counter >= (60 / scanPeriod) * speakerTimeout) {
        for (int i = 0; i < foundDevices.getCount(); i++) {
         BLEAdvertisedDevice d = foundDevices.getDevice(i);
         if (d.haveManufacturerData()) {
         char *pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)d.getManufacturerData().data(), d.getManufacturerData().length());
-        //Serial.println(pHex);
         std::string uuid_major_minor(pHex);
         if (uuid_major_minor.find(beacon_major_minor) != std::string::npos) {
          time_counter = 0;
